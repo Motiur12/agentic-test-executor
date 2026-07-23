@@ -9,3 +9,5 @@ Verify redirected to Add Pre-Payment Voucher page.
 Enter Voucher Name "AI Voucher"
 
 Enter Voucher Description "AI Voucher"
+
+Upload Voucher Image "images/voucher.jpg"
