@@ -58,6 +58,13 @@ Rules:
       "value":""
    }
 
+   For click actions, include:
+   {
+      "action":"click",
+      "target":"Add new Button",
+      "wait_for_navigation": true
+   }
+
 5. "target" MUST be the visible text that a human tester sees.
 
 Examples:
@@ -79,9 +86,45 @@ Incorrect:
 - dashboard title or element
 - save button
 
+Verification Rules
+
+1. If the test case asks to verify visible text:
+
+Example:
+Verify Dashboard.
+
+Return:
+
+{
+    "action":"verify",
+    "verify_type":"text",
+    "target":"Dashboard"
+}
+
+2. If the test case asks to verify a URL or redirection:
+
+Example:
+Verify redirected to Add Pre-Payment Voucher page.
+
+Return:
+
+{
+    "action":"verify",
+    "verify_type":"url_contains",
+    "value":"/pre-payment-voucher/add"
+}
+
 6. Use "value" only for actions that require input.
 
-7. Return ONLY JSON.
+7. If a test case asks to verify a page URL, return:
+
+{
+    "action":"verify",
+    "verify_type":"url_contains",
+    "value":"/pre-payment-voucher/add"
+}
+
+8. Return ONLY JSON.
 """
 
         return self.llm.ask(system, test_case)

@@ -1,5 +1,6 @@
 from playwright.sync_api import Page
 from .base import BaseAction
+from core.locator import Locator
 
 
 class EnterTextAction(BaseAction):
@@ -18,35 +19,14 @@ class EnterTextAction(BaseAction):
 
             return
 
-        strategies = [
+        locator = Locator(page).find(target)
 
-            lambda: page.get_by_label(target),
+        if locator is None:
 
-            lambda: page.get_by_placeholder(target),
+            raise Exception(
+                f"Could not find input: {target}"
+            )
 
-            lambda: page.get_by_role("textbox", name=target),
+        locator.fill(value)
 
-            lambda: page.locator(f'input[name="{target}"]'),
-
-            lambda: page.locator(f'input[id="{target}"]'),
-
-        ]
-
-        for strategy in strategies:
-
-            try:
-
-                locator = strategy()
-
-                if locator.count() > 0:
-
-                    locator.first.fill(value)
-
-                    print(f"✓ Filled '{target}'")
-
-                    return
-
-            except Exception:
-                continue
-
-        raise Exception(f"Could not find input field: {target}")
+        print(f"✓ Filled '{target}'")

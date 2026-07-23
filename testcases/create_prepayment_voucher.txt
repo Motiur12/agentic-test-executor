@@ -1,3 +1,11 @@
 Click Subsidy.
 
 Click Pre-Payment Voucher.
+
+Click Add new Button.
+
+Verify redirected to Add Pre-Payment Voucher page.
+
+Enter Voucher Name "AI Voucher"
+
+Enter Voucher Description "AI Voucher"

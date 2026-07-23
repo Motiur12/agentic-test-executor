@@ -34,17 +34,17 @@ class Executor:
                     return
 
                 try:
-                    action.execute(
-                        page=self.browser.page,
-                        **step
-                    )
+                    params = dict(step)
+                    params.pop("action", None)
+
+                    action.execute(self.browser.page, **params)
 
                     # Save session after successful dashboard login
                     if (
                         step["action"] == "verify"
-                        and step["target"] == "Dashboard"
+                        and step.get("verify_type", "text") == "text"
+                        and step.get("target") == "Dashboard"
                     ):
-
                         Session.save(self.browser.page)
 
                     print("✓ PASS")

@@ -1,43 +1,44 @@
-from playwright.sync_api import Page, TimeoutError
+from playwright.sync_api import TimeoutError
+
 from .base import BaseAction
+from core.locator import Locator
 
 
 class ClickAction(BaseAction):
 
-    def execute(self, page: Page, target=None, **kwargs):
+    def execute(
+        self,
+        page,
+        target=None,
+        wait_for_navigation=False,
+        **kwargs
+    ):
 
-        strategies = [
+        locator = Locator(page).find(target)
 
-            lambda: page.get_by_role("button", name=target),
+        if locator is None:
+            raise Exception(
+                f"Could not find clickable element: {target}"
+            )
 
-            lambda: page.get_by_role("link", name=target),
+        old_url = page.url
 
-            lambda: page.get_by_label(target),
+        locator.click()
 
-            lambda: page.get_by_text(target, exact=True),
-
-            lambda: page.get_by_text(target),
-
-        ]
-
-        for strategy in strategies:
+        if wait_for_navigation:
 
             try:
 
-                locator = strategy()
-
-                if locator.count() > 0:
-
-                    locator.first.scroll_into_view_if_needed()
-                    locator.first.click(timeout=3000)
-
-                    print(f"✓ Clicked '{target}'")
-                    return
+                page.wait_for_function(
+                    "(old) => window.location.href !== old",
+                    arg=old_url,
+                    timeout=5000
+                )
 
             except TimeoutError:
-                continue
 
-            except Exception:
-                continue
+                raise Exception(
+                    f"Navigation did not occur after clicking '{target}'"
+                )
 
-        raise Exception(f"Could not find clickable element: {target}")
+        print(f"✓ Clicked '{target}'")

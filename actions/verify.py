@@ -1,17 +1,40 @@
-from playwright.sync_api import Page
 from .base import BaseAction
+from core.locator import Locator
 
 
 class VerifyAction(BaseAction):
 
-    def execute(self, page: Page, target=None, **kwargs):
+    def execute(
+        self,
+        page,
+        verify_type=None,
+        target=None,
+        value=None,
+        **kwargs
+    ):
 
-        page.get_by_text(target).first.wait_for(timeout=5000)
+        if verify_type == "url_contains":
+
+            if value not in page.url:
+
+                raise Exception(
+                    f"Expected URL to contain '{value}'\n"
+                    f"Actual URL: {page.url}"
+                )
+
+            print(f"✓ URL Verified '{value}'")
+
+            return
+
+        # Default = verify visible element/text
+        locator = Locator(page).find(target)
+
+        if locator is None:
+
+            raise Exception(
+                f"Verification failed: {target}"
+            )
+
+        locator.wait_for()
 
         print(f"✓ Verified '{target}'")
-
-        from core.session import Session
-
-        if target == "Dashboard":
-
-            print("✓ Session saved")
