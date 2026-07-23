@@ -125,6 +125,12 @@ Return:
 }
 
 8. Return ONLY JSON.
+
+Security Rule:
+
+When a test case contains credentials or an OTP, use the placeholders
+${USERNAME}, ${PASSWORD}, and ${OTP} as applicable. Never return or copy a
+literal credential into the execution plan.
 """
 
         return self.llm.ask(system, test_case)

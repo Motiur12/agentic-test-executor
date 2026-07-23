@@ -14,7 +14,7 @@ class ClickAction(BaseAction):
         **kwargs
     ):
 
-        locator = Locator(page).find(target)
+        locator = Locator(page).find_clickable(target)
 
         if locator is None:
             raise Exception(

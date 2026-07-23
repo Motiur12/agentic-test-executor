@@ -12,7 +12,14 @@ class Resolver:
         if value.startswith("${") and value.endswith("}"):
 
             key = value[2:-1]
+            resolved = VARIABLES.get(key)
 
-            return VARIABLES.get(key, value)
+            if not resolved:
+                raise ValueError(
+                    f"Missing required secret for ${{{key}}}. "
+                    f"Set the corresponding CARTUP_{key} environment variable."
+                )
+
+            return resolved
 
         return value
