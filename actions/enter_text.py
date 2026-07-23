@@ -19,14 +19,6 @@ class EnterTextAction(BaseAction):
 
             return
 
-        locator = Locator(page).find(target)
-
-        if locator is None:
-
-            raise Exception(
-                f"Could not find input: {target}"
-            )
-
-        locator.fill(value)
+        Locator(page).enter(target, value)
 
         print(f"✓ Filled '{target}'")
