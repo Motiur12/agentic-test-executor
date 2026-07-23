@@ -1,0 +1,9 @@
+Test Case: Login
+
+Steps:
+
+1. Open https://pre-prod-admin.cartup.com
+2. Enter username "${USERNAME}"
+3. Enter password "${PASSWORD}"
+4. Click Login
+5. Verify Dashboard is displayed
