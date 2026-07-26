@@ -30,6 +30,7 @@ class Session:
     @staticmethod
     def save(page):
 
+        os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
         page.context.storage_state(path=SESSION_FILE)
 
         print("✓ Session saved")
