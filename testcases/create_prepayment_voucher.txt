@@ -1,9 +1,4 @@
 Test Case ID: 01
-Test Case Description: ABC
-
-Steps:
-
-Test Case ID: 01
 Test Case Description: Create pre-payment voucher
 
 Steps:
@@ -25,3 +20,14 @@ Upload Voucher Image "images/voucher.jpg".
 Enter Voucher Budget "50000".
 
 Ernter Bank Share "50"
+
+
+Test Case ID: 02
+Test Case Description: Create pre-payment voucher
+
+Steps:
+Click Subsidy.
+
+Click Pre-Payment Voucher.
+
+Click Add new Button.
