@@ -3,6 +3,17 @@ from core.session import Session
 
 class CartUpWorkflow:
 
+    @staticmethod
+    def _is_login_plan(plan):
+        """Detect a planner-generated login testcase before injecting it again."""
+        targets = {
+            step.get("target", "").strip().lower()
+            for step in plan.get("steps", [])
+            if isinstance(step, dict)
+        }
+
+        return {"username", "password", "login"}.issubset(targets)
+
     def process(self, plan):
 
         # If session exists, use the plan as-is
@@ -45,6 +56,11 @@ class CartUpWorkflow:
                 "target": "Dashboard"
             }
         ]
+
+        if self._is_login_plan(plan):
+            print("Login testcase detected. Using the standard login flow.")
+            plan["steps"] = login_steps
+            return plan
 
         plan["steps"] = login_steps + plan["steps"]
 

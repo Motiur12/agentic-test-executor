@@ -27,14 +27,18 @@ class VerifyAction(BaseAction):
             return
 
         # Default = verify visible element/text
+        # Targets are visible text.  Use Playwright's lazy locator as a
+        # fallback so a page transition has time to render the target.
         locator = Locator(page).find(target)
 
         if locator is None:
+            locator = page.get_by_text(target, exact=False).first
 
+        try:
+            locator.wait_for(state="visible")
+        except Exception as exc:
             raise Exception(
                 f"Verification failed: {target}"
-            )
-
-        locator.wait_for()
+            ) from exc
 
         print(f"✓ Verified '{target}'")

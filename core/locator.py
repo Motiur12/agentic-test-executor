@@ -28,6 +28,46 @@ class Locator:
         return " ".join(target.split())
 
     # -------------------------
+    # VERIFY
+    # -------------------------
+
+    def find(self, target: str):
+        """Return the first element matching visible text or an accessible name."""
+        target = self.normalize(target)
+
+        if not target:
+            return None
+
+        strategies = [
+            lambda: self.page.get_by_role(
+                "heading",
+                name=target,
+                exact=False
+            ),
+            lambda: self.page.get_by_text(
+                target,
+                exact=False
+            ),
+            lambda: self.page.get_by_label(
+                target,
+                exact=False
+            ),
+            lambda: self.page.locator(f'text="{target}"'),
+        ]
+
+        for strategy in strategies:
+            try:
+                locator = strategy()
+
+                if locator.count() > 0:
+                    return locator.first
+
+            except Exception:
+                continue
+
+        return None
+
+    # -------------------------
     # CLICK
     # -------------------------
 
