@@ -71,7 +71,7 @@ class Locator:
     # CLICK
     # -------------------------
 
-    def find_clickable(self, target: str):
+    def find_clickable(self, target: str, timeout=5000):
 
         target = self.normalize(target)
 
@@ -105,18 +105,25 @@ class Locator:
 
         ]
 
-        for strategy in strategies:
+        attempts = max(1, timeout // 250)
 
-            try:
+        for attempt in range(attempts):
 
-                locator = strategy()
+            for strategy in strategies:
 
-                if locator.count() > 0:
+                try:
 
-                    return locator.first
+                    locator = strategy()
 
-            except:
-                pass
+                    if locator.count() > 0:
+
+                        return locator.first
+
+                except:
+                    pass
+
+            if attempt < attempts - 1:
+                self.page.wait_for_timeout(250)
 
         return None
 

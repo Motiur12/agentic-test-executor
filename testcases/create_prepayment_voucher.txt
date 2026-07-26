@@ -1,10 +1,20 @@
+Test Case ID: 01
+Test Case Description: ABC
+
+Steps:
+
+Test Case ID: 01
+Test Case Description: Create pre-payment voucher
+
+Steps:
+
 Click Subsidy.
 
 Click Pre-Payment Voucher.
 
 Click Add new Button.
 
-Verify redirected to Add Pre-Payment Voucher page.
+Verify URL contains "/pre-payment-voucher/add".
 
 Enter Voucher Name "AI Voucher".
 

@@ -16,7 +16,15 @@ class CartUpWorkflow:
 
     def process(self, plan):
 
-        # If session exists, use the plan as-is
+        is_login_plan = self._is_login_plan(plan)
+
+        # A login testcase must exercise the login form, not reuse a saved
+        # dashboard session.
+        if is_login_plan and Session.exists():
+            print("Login testcase detected. Clearing existing session.")
+            Session.delete()
+
+        # Reuse a session only for non-login testcases.
         if Session.exists():
             print("Using existing session.")
             return plan
@@ -57,7 +65,7 @@ class CartUpWorkflow:
             }
         ]
 
-        if self._is_login_plan(plan):
+        if is_login_plan:
             print("Login testcase detected. Using the standard login flow.")
             plan["steps"] = login_steps
             return plan
