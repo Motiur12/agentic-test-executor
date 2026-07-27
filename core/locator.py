@@ -1,6 +1,5 @@
 from playwright.sync_api import Page
 
-
 class Locator:
 
     def __init__(self, page: Page):
@@ -299,6 +298,12 @@ class Locator:
                 lambda root: root.get_by_role("combobox", name=target, exact=False)
             ),
 
+            lambda: self._first(
+                lambda: self.page.locator(
+                    f'label:text-is("{target.title()}") + div input[role="combobox"]'
+                )
+            ),
+
             lambda: self._first(lambda: self.page.locator(f'[title="{target}"]')),
 
             lambda: self._first(lambda: self.page.locator(f'[title*="{target}" i]'))
@@ -367,12 +372,19 @@ class Locator:
         locator = self.find_input(target)
 
         if locator is None:
-
-            raise Exception(
-                f"Could not find input: {target}"
-            )
+            raise Exception(f"Could not find input: {target}")
 
         role = locator.get_attribute("role")
+
+        if role == "combobox":
+
+            locator.click()
+
+            locator.type(str(value), delay=30)
+
+            locator.press("Enter")
+
+            return
 
         if role == "spinbutton":
 

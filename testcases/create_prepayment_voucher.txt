@@ -20,14 +20,10 @@ Upload Voucher Image "images/voucher.jpg".
 Enter Voucher Budget "50000".
 
 Ernter Bank Share "50"
+Enter Discount Type "Percentage"
+Enter Min.Order Value "100"
+Enter Percent Amount "10"
+Enter Max. Discount Value "200"
 
-
-Test Case ID: 02
-Test Case Description: Create pre-payment voucher
-
-Steps:
-Click Subsidy.
-
-Click Pre-Payment Voucher.
-
-Click Add new Button.
+Enter Customer Type "New"
+Check Destination Region Unlimited.

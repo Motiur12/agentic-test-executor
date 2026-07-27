@@ -4,6 +4,7 @@ from .enter_text import EnterTextAction
 from .verify import VerifyAction
 from .upload import UploadAction
 from .enter_number import EnterNumberAction
+from .check import CheckAction
 from .wait_for_navigation import WaitForNavigationAction
 
 ACTIONS = {
@@ -13,5 +14,6 @@ ACTIONS = {
     "verify": VerifyAction(),
     "upload": UploadAction(),
     "enter_number": EnterNumberAction(),
+    "check": CheckAction(),
     "wait_for_navigation": WaitForNavigationAction(),
 }

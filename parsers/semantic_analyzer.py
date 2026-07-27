@@ -12,6 +12,18 @@ class SemanticAnalyzer:
             return {"action": "click", "target": match.group(1)}
 
         if match := re.fullmatch(
+            r"(?:check|tick|select)\s+(.+?)\s+(limited|unlimited|yes|no|whitelist|blacklist|both)",
+            instruction,
+            re.I,
+        ):
+            group, target = match.groups()
+            return {
+                "action": "check",
+                "group": group,
+                "target": target,
+            }
+
+        if match := re.fullmatch(
             r"(?:type|fill)\s+['\"](.*?)['\"]\s+(?:in|into)\s+(.+)",
             instruction,
             re.I,
