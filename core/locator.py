@@ -1,5 +1,6 @@
 from playwright.sync_api import Page
 
+
 class Locator:
 
     def __init__(self, page: Page):
@@ -83,7 +84,8 @@ class Locator:
             "link",
             "dropdown",
             "menu",
-            "icon"
+            "icon",
+            "select"
         ]
 
         target = target.lower()
@@ -119,11 +121,7 @@ class Locator:
                 lambda root: root.get_by_text(target, exact=False)
             ),
             lambda: self._first(lambda: self.page.locator(f'[aria-label="{target}"]')),
-
             lambda: self._first(lambda: self.page.locator(f'[aria-label*="{target}" i]')),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_label(target, exact=True)
-            ),
             lambda: self._first_scoped(
                 lambda root: root.get_by_label(target, exact=True)
             ),
@@ -135,12 +133,6 @@ class Locator:
             ),
             lambda: self._first_scoped(
                 lambda root: root.get_by_placeholder(target, exact=False)
-            ),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_text(target, exact=True)
-            ),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_text(target, exact=False)
             ),
             lambda: self._last_scoped(
                 lambda root: root.locator("*").filter(has_text=target)
@@ -325,35 +317,74 @@ class Locator:
     def find_combobox(self, target: str):
         """Return the first visible combobox-style element matching target.
 
-        Search order: Label -> Role=combobox -> aria-label -> Placeholder.
+        React Select (and similar) often expose no accessible name and put the
+        visible label in a sibling placeholder <div>, not the HTML placeholder
+        attribute. Strategies therefore try both the raw target and a lightly
+        normalized form, then fall back to locating by nearby visible text.
         """
-        target = self.normalize(target)
+        raw = (target or "").strip()
+        # Keep "Select State" intact for placeholder matching; only drop noise
+        # words that are never part of the visible label.
+        soft = raw.lower()
+        for word in ("button", "textbox", "text box", "input", "field", "link",
+                     "dropdown", "menu", "icon"):
+            soft = soft.replace(word, "")
+        soft = " ".join(soft.split())
 
-        if not target:
+        if not raw and not soft:
             return None
 
-        strategies = [
-            lambda: self._first_scoped(
-                lambda root: root.get_by_label(target, exact=True)
-            ),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_label(target, exact=False)
-            ),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_role("combobox", name=target, exact=True)
-            ),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_role("combobox", name=target, exact=False)
-            ),
-            lambda: self._first(lambda: self.page.locator(f'[aria-label="{target}"]')),
-            lambda: self._first(lambda: self.page.locator(f'[aria-label*="{target}" i]')),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_placeholder(target, exact=True)
-            ),
-            lambda: self._first_scoped(
-                lambda root: root.get_by_placeholder(target, exact=False)
-            ),
-        ]
+        variants = []
+        for v in (raw, soft, self.normalize(raw)):
+            if v and v not in variants:
+                variants.append(v)
+
+        strategies = []
+
+        for v in variants:
+            strategies.extend([
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_label(v, exact=True)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_label(v, exact=False)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("combobox", name=v, exact=True)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("combobox", name=v, exact=False)
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'[aria-label="{v}"]')
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'[aria-label*="{v}" i]')
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_placeholder(v, exact=True)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_placeholder(v, exact=False)
+                ),
+                # React Select: placeholder is a <div>, not an attribute.
+                # Find visible text, climb to the control that owns a combobox.
+                lambda v=v: self._first(
+                    lambda: self.page.get_by_text(v, exact=False)
+                    .locator(
+                        'xpath=ancestor::*[.//input[@role="combobox"]][1]'
+                    )
+                    .locator('input[role="combobox"]')
+                ),
+                # Same idea, scoped to common react-select container patterns
+                # without hard-coding emotion CSS hashes.
+                lambda v=v: self._first(
+                    lambda: self.page.locator(
+                        f'div:has(> div:text-is("{v}")), '
+                        f'div:has([class*="placeholder"]:text-is("{v}"))'
+                    ).locator('input[role="combobox"]').first
+                ),
+            ])
 
         for strategy in strategies:
             locator = strategy()
@@ -372,18 +403,15 @@ class Locator:
         locator = self.find_input(target)
 
         if locator is None:
+            locator = self.find_combobox(target)
+
+        if locator is None:
             raise Exception(f"Could not find input: {target}")
 
         role = locator.get_attribute("role")
 
         if role == "combobox":
-
-            locator.click()
-
-            locator.type(str(value), delay=30)
-
-            locator.press("Enter")
-
+            self._fill_combobox(locator, value)
             return
 
         if role == "spinbutton":
@@ -401,6 +429,52 @@ class Locator:
             return
 
         locator.fill(str(value))
+
+    def _fill_combobox(self, locator, value):
+        """Type into a combobox and confirm the matching option.
+
+        Works for React Select, MUI Autocomplete, and native-ish listboxes:
+        open → type filter → pick option by role or visible text → fallback Enter.
+        """
+        value = str(value)
+
+        locator.click()
+        # Clear any previous selection text so filtering starts clean.
+        locator.press("Control+A")
+        locator.press("Backspace")
+        locator.type(value, delay=30)
+
+        # Prefer an explicit option click (React Select listbox).
+        option = None
+        option_strategies = [
+            lambda: self.page.get_by_role("option", name=value, exact=True),
+            lambda: self.page.get_by_role("option", name=value, exact=False),
+            lambda: self.page.locator(
+                f'[id*="option"]:text-is("{value}")'
+            ),
+            lambda: self.page.locator(
+                f'[class*="option"]:text-is("{value}")'
+            ),
+            lambda: self.page.get_by_text(value, exact=True),
+        ]
+
+        for strategy in option_strategies:
+            try:
+                candidate = strategy().first
+                candidate.wait_for(state="visible", timeout=1500)
+                if candidate.is_visible():
+                    option = candidate
+                    break
+            except Exception:
+                continue
+
+        if option is not None:
+            option.click()
+        else:
+            locator.press("Enter")
+
+        # Let dependent fields (City after State, Zone after City) render.
+        self.page.wait_for_timeout(300)
 
     def enter_number(self, target, value):
 

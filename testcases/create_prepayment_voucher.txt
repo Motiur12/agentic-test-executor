@@ -25,5 +25,8 @@ Enter Min.Order Value "100"
 Enter Percent Amount "10"
 Enter Max. Discount Value "200"
 
-Enter Customer Type "New"
-Check Destination Region Unlimited.
+Enter Customer Type "New".
+Check Destination Region limited.
+Enter Select State "Dhaka North"
+Enter Select City "Lal"
+Enter Select Zone "Lalmatia Block A"
