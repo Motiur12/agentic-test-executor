@@ -5,7 +5,9 @@ class SemanticAnalyzer:
     """Map supported natural-language variants to canonical execution steps."""
 
     def analyze(self, instruction: str):
-        if match := re.fullmatch(r"(?:open|goto|navigate\s+to)\s+(https?://\S+)", instruction, re.I):
+        if match := re.fullmatch(
+            r"(?:open|goto|navigate\s+to)\s+(https?://\S+)", instruction, re.I
+        ):
             return {"action": "goto", "url": match.group(1)}
 
         if match := re.fullmatch(r"(?:click|press|tap|choose)\s+(.+)", instruction, re.I):
@@ -17,11 +19,16 @@ class SemanticAnalyzer:
             re.I,
         ):
             group, target = match.groups()
-            return {
-                "action": "check",
-                "group": group,
-                "target": target,
-            }
+            return {"action": "check", "group": group, "target": target}
+
+        # Combobox / dropdown selection: Select State "Dhaka North"
+        if match := re.fullmatch(
+            r"(?:select|choose)\s+(.+?)\s+['\"](.*?)['\"]",
+            instruction,
+            re.I,
+        ):
+            target, value = match.groups()
+            return {"action": "select", "target": target, "value": value}
 
         if match := re.fullmatch(
             r"(?:type|fill)\s+['\"](.*?)['\"]\s+(?:in|into)\s+(.+)",
@@ -45,26 +52,54 @@ class SemanticAnalyzer:
             target, value = match.groups()
             return self._entry_step(target, value)
 
-        if match := re.fullmatch(r"(?:upload|attach)\s+(.+?)\s+['\"](.*?)['\"]", instruction, re.I):
+        if match := re.fullmatch(
+            r"(?:upload|attach)\s+(.+?)\s+['\"](.*?)['\"]", instruction, re.I
+        ):
             target, value = match.groups()
             return {"action": "upload", "target": target, "value": value}
+
+        if match := re.fullmatch(
+            r"(?:wait|pause|sleep)\s+(\d+)\s*(?:ms|milliseconds?)?",
+            instruction,
+            re.I,
+        ):
+            return {"action": "wait", "timeout": int(match.group(1))}
+
+        if match := re.fullmatch(
+            r"(?:wait|pause|sleep)\s+(\d+)\s*(?:s|sec|seconds?)",
+            instruction,
+            re.I,
+        ):
+            return {"action": "wait", "timeout": int(match.group(1)) * 1000}
 
         if match := re.fullmatch(
             r"(?:verify|confirm)\s+(?:that\s+)?url\s+(?:contains|includes)\s+['\"](.*?)['\"]",
             instruction,
             re.I,
         ):
-            return {"action": "verify", "verify_type": "url_contains", "value": match.group(1)}
+            return {
+                "action": "verify",
+                "verify_type": "url_contains",
+                "value": match.group(1),
+            }
 
         if match := re.fullmatch(
             r"(?:verify|confirm)\s+(?:that\s+)?(.+?)\s+(?:is\s+)?(?:displayed|visible|shown|appears)",
             instruction,
             re.I,
         ):
-            return {"action": "verify", "verify_type": "text", "target": match.group(1)}
+            return {
+                "action": "verify",
+                "verify_type": "text",
+                "target": match.group(1),
+            }
 
         if match := re.fullmatch(r"(?:verify|confirm)\s+(.+)", instruction, re.I):
-            return {"action": "verify", "verify_type": "text", "target": match.group(1)}
+            return {
+                "action": "verify",
+                "verify_type": "text",
+                "target": match.group(1),
+            }
 
         raise ValueError(f"Unsupported testcase instruction: {instruction}")
 

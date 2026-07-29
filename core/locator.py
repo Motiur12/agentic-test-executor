@@ -95,6 +95,28 @@ class Locator:
 
         return " ".join(target.split())
 
+    def _variants(self, target: str, *, strip_select: bool = False):
+        """Build unique target strings for multi-strategy lookup.
+
+        strip_select=False keeps words like "Select State" intact (combobox
+        placeholders). strip_select=True applies full normalize().
+        """
+        raw = (target or "").strip()
+        soft = raw.lower()
+        noise = (
+            "button", "textbox", "text box", "input", "field", "link",
+            "dropdown", "menu", "icon",
+        )
+        for word in noise:
+            soft = soft.replace(word, "")
+        soft = " ".join(soft.split())
+
+        variants = []
+        for v in (raw, soft, self.normalize(raw) if strip_select else None):
+            if v and v not in variants:
+                variants.append(v)
+        return variants
+
     # -------------------------
     # VERIFY
     # -------------------------
@@ -155,56 +177,130 @@ class Locator:
     # -------------------------
 
     def find_clickable(self, target: str, timeout=5000):
+        """Find a clickable control by label, role, text, or icon-button cues.
 
-        target = self.normalize(target)
+        Icon-only buttons (SVG with no visible text) are matched via
+        aria-label, title, test-id, or — for common action words like
+        add/plus/remove/delete/close/edit/search — a visible button that
+        contains an SVG and has no text content.
 
-        strategies = [
+        Loose get_by_text is intentionally limited: short words like "Add"
+        appear inside URLs (e.g. /pre-payment-voucher/add) and Next.js route
+        announcers, so text search is restricted to interactive roles.
+        """
+        raw = (target or "").strip()
+        soft = raw.lower()
+        for word in ("button", "textbox", "text box", "input", "field", "link",
+                     "dropdown", "menu", "icon"):
+            soft = soft.replace(word, "")
+        soft = " ".join(soft.split())
 
-            lambda: self._first(lambda: self.page.get_by_test_id(target)),
+        variants = []
+        for v in (raw, soft, self.normalize(raw)):
+            if v and v not in variants:
+                variants.append(v)
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_role("button", name=target, exact=True)
-            ),
+        if not variants:
+            return None
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_role("button", name=target, exact=False)
-            ),
+        icon_actions = {
+            "add", "plus", "+", "create", "new",
+            "remove", "delete", "close", "x", "clear",
+            "edit", "search", "filter", "more", "menu",
+        }
+        wants_icon = any(
+            v.lower() in icon_actions or v.lower().rstrip("s") in icon_actions
+            for v in variants
+        )
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_role("link", name=target, exact=True)
-            ),
+        strategies = []
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_role("link", name=target, exact=False)
-            ),
+        # 1) Explicit identifiers and named interactive controls
+        for v in variants:
+            strategies.extend([
+                lambda v=v: self._first(lambda: self.page.get_by_test_id(v)),
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_label(target, exact=True)
-            ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("button", name=v, exact=True)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("button", name=v, exact=False)
+                ),
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_label(target, exact=False)
-            ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("link", name=v, exact=True)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("link", name=v, exact=False)
+                ),
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_text(target, exact=True)
-            ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_label(v, exact=True)
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_label(v, exact=False)
+                ),
 
-            lambda: self._first_scoped(
-                lambda root: root.get_by_text(target, exact=False)
-            ),
+                # a11y attributes on any element
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'[aria-label="{v}"]')
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'[aria-label*="{v}" i]')
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'button[aria-label="{v}" i]')
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'button[aria-label*="{v}" i]')
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'[title="{v}"]')
+                ),
+                lambda v=v: self._first(
+                    lambda: self.page.locator(f'[title*="{v}" i]')
+                ),
+            ])
 
-            lambda: self._last_scoped(
-                lambda root: root.locator("*").filter(has_text=target)
-            ),
+        # 2) Icon-only button — before loose text, so "Click Add" hits the
+        #    SVG "+" control instead of a URL fragment or route announcer.
+        if wants_icon:
+            strategies.append(lambda: self._first_icon_button())
 
-            lambda: self._first(lambda: self.page.locator(f'[title="{target}"]')),
+        # 3) Text on interactive elements only (avoids <p role="alert"> etc.)
+        for v in variants:
+            strategies.extend([
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("button").filter(
+                        has_text=v
+                    )
+                ),
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_role("link").filter(
+                        has_text=v
+                    )
+                ),
+                # Exact whole-string text on any node (safe for "Add new Button")
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_text(v, exact=True)
+                ),
+            ])
 
-            lambda: self._first(lambda: self.page.locator(f'[title*="{target}" i]')),
-
-            lambda: self._first(lambda: self.page.locator(f'text="{target}"'))
-
-        ]
+        # 4) Loose text last, and only for longer targets (len > 3) so
+        #    short words like "Add"/"New" cannot match URL substrings.
+        for v in variants:
+            if len(v) <= 3:
+                continue
+            strategies.extend([
+                lambda v=v: self._first_scoped(
+                    lambda root: root.get_by_text(v, exact=False)
+                ),
+                lambda v=v: self._last_scoped(
+                    lambda root: root.locator(
+                        "button, a, [role='button'], [role='link']"
+                    ).filter(has_text=v)
+                ),
+            ])
 
         attempts = max(1, timeout // 250)
 
@@ -218,6 +314,41 @@ class Locator:
 
             if attempt < attempts - 1:
                 self.page.wait_for_timeout(250)
+
+        return None
+
+    def _first_icon_button(self):
+        """Return a visible icon-only button (has SVG, no meaningful text).
+
+        Generic: no framework classes, no SVG path fingerprints.
+        Prefers the last visible match so an inline "+" under a table
+        wins over a header toolbar icon when both exist.
+        Skips elements that are not in the viewport / not enabled.
+        """
+        try:
+            candidates = self.page.locator(
+                "button:has(svg), [role='button']:has(svg)"
+            )
+            count = candidates.count()
+            for i in range(count - 1, -1, -1):
+                candidate = candidates.nth(i)
+                try:
+                    if not candidate.is_visible():
+                        continue
+                    if not candidate.is_enabled():
+                        continue
+                    text = (candidate.inner_text() or "").strip()
+                    # Icon-only: empty or only a decorative glyph
+                    if text and text not in {"+", "×", "x", "X", "✖", "＋"}:
+                        continue
+                    box = candidate.bounding_box()
+                    if box is None:
+                        continue
+                    return candidate
+                except Exception:
+                    continue
+        except Exception:
+            pass
 
         return None
 
@@ -246,13 +377,40 @@ class Locator:
 
             lambda: self._first(lambda: self.page.get_by_test_id(target)),
 
-            lambda: self._first(lambda: self.page.locator(f'[name="{target}"]')),
-
+            # Prefer real form controls over wrapper divs (e.g. PrimeReact
+            # Password puts name= on a <div>, with the <input> nested inside).
+            lambda: self._first(
+                lambda: self.page.locator(f'input[name="{field_name}"]')
+            ),
+            lambda: self._first(
+                lambda: self.page.locator(f'textarea[name="{field_name}"]')
+            ),
+            lambda: self._first(
+                lambda: self.page.locator(f'input[name="{target}"]')
+            ),
+            lambda: self._first(
+                lambda: self.page.locator(f'textarea[name="{target}"]')
+            ),
+            lambda: self._first(
+                lambda: self.page.locator(
+                    f'input[type="password"][name="{field_name}"], '
+                    f'input[type="password"]'
+                )
+            ),
+            # Wrapper with name= → nested editable control
+            lambda: self._first(
+                lambda: self.page.locator(
+                    f'[name="{field_name}"] input, [name="{field_name}"] textarea'
+                )
+            ),
+            lambda: self._first(
+                lambda: self.page.locator(
+                    f'[name="{target}"] input, [name="{target}"] textarea'
+                )
+            ),
             lambda: self._first(lambda: self.page.locator(f'[name="{field_name}"]')),
 
-            lambda: self._first(lambda: self.page.locator(f'input[name="{field_name}"]')),
-
-            lambda: self._first(lambda: self.page.locator(f'textarea[name="{field_name}"]')),
+            lambda: self._first(lambda: self.page.locator(f'[name="{target}"]')),
 
             lambda: self._first_scoped(
                 lambda root: root.get_by_placeholder(f"Enter {target.title()}", exact=False)
@@ -376,8 +534,8 @@ class Locator:
                     )
                     .locator('input[role="combobox"]')
                 ),
-                # Same idea, scoped to common react-select container patterns
-                # without hard-coding emotion CSS hashes.
+                # Same idea, scoped to common react-select container class
+                # patterns without hard-coding emotion hashes.
                 lambda v=v: self._first(
                     lambda: self.page.locator(
                         f'div:has(> div:text-is("{v}")), '
@@ -408,7 +566,10 @@ class Locator:
         if locator is None:
             raise Exception(f"Could not find input: {target}")
 
+        locator = self._resolve_editable(locator)
+
         role = locator.get_attribute("role")
+        tag = (locator.evaluate("el => el.tagName") or "").lower()
 
         if role == "combobox":
             self._fill_combobox(locator, value)
@@ -428,7 +589,50 @@ class Locator:
 
             return
 
-        locator.fill(str(value))
+        # Native inputs / textareas / contenteditable
+        if tag in {"input", "textarea"} or role in {"textbox", "searchbox"}:
+            locator.fill(str(value))
+            return
+
+        # Last resort: type into focused control
+        locator.click()
+        locator.press("Control+A")
+        locator.type(str(value), delay=30)
+
+    def _resolve_editable(self, locator):
+        """If locator is a wrapper (PrimeReact Password, etc.), return the inner input."""
+        try:
+            tag = (locator.evaluate("el => el.tagName") or "").lower()
+        except Exception:
+            return locator
+
+        if tag in {"input", "textarea"}:
+            return locator
+
+        try:
+            role = locator.get_attribute("role")
+        except Exception:
+            role = None
+
+        if role in {"textbox", "searchbox", "spinbutton", "combobox"}:
+            return locator
+
+        # Nested real control (PrimeReact p-password, MUI, etc.)
+        for sel in (
+            'input:not([type="hidden"])',
+            "textarea",
+            '[contenteditable="true"]',
+            'input[type="password"]',
+            'input[type="text"]',
+        ):
+            try:
+                inner = locator.locator(sel).first
+                if inner.count() > 0 and inner.is_visible():
+                    return inner
+            except Exception:
+                continue
+
+        return locator
 
     def _fill_combobox(self, locator, value):
         """Type into a combobox and confirm the matching option.

@@ -1,45 +1,37 @@
 import json
-import os
+from pathlib import Path
 
-SESSION_FILE = "session/storage_state.json"
+import config
+
+SESSION_FILE = config.SESSION_DIR / "storage_state.json"
 
 
 class Session:
 
     @staticmethod
     def exists():
-
-        if not os.path.exists(SESSION_FILE):
+        if not SESSION_FILE.is_file():
             return False
 
         try:
-            with open(SESSION_FILE, "r", encoding="utf-8") as f:
+            with SESSION_FILE.open(encoding="utf-8") as f:
                 json.load(f)
-
             return True
-
         except Exception:
-
             return False
 
     @staticmethod
     def file():
-
-        return SESSION_FILE
+        return str(SESSION_FILE)
 
     @staticmethod
     def save(page):
-
-        os.makedirs(os.path.dirname(SESSION_FILE), exist_ok=True)
-        page.context.storage_state(path=SESSION_FILE)
-
+        SESSION_FILE.parent.mkdir(parents=True, exist_ok=True)
+        page.context.storage_state(path=str(SESSION_FILE))
         print("✓ Session saved")
 
     @staticmethod
     def delete():
-
-        if os.path.exists(SESSION_FILE):
-
-            os.remove(SESSION_FILE)
-
+        if SESSION_FILE.is_file():
+            SESSION_FILE.unlink()
             print("✓ Session deleted")

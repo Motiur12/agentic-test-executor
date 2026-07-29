@@ -1,39 +1,67 @@
-import sys
+import argparse
 import json
+import sys
+from pathlib import Path
 
-from agents.planner import Planner
 from agents.executor import Executor
+from agents.planner import Planner
 from workflows.cartup import CartUpWorkflow
 
-# Default test case
-testcase_file = "testcases/login.txt"
 
-# If user provides a file
-if len(sys.argv) > 1:
-    testcase_file = sys.argv[1]
+def parse_args():
+    parser = argparse.ArgumentParser(
+        description="Agentic UI test executor for CartUp admin."
+    )
+    parser.add_argument(
+        "testcase",
+        nargs="?",
+        default="testcases/login.txt",
+        help="Path to a plain-text testcase file (default: testcases/login.txt)",
+    )
+    parser.add_argument(
+        "--quiet-plan",
+        action="store_true",
+        help="Do not print the full execution plan JSON",
+    )
+    return parser.parse_args()
 
-# Read test case
-with open(testcase_file, "r", encoding="utf-8") as f:
-    testcase = f.read()
 
-# Generate execution plan(s) - one per "Test Case ID:" block, if present
-planner = Planner()
-plan = planner.plan(testcase)
+def main() -> int:
+    args = parse_args()
+    testcase_path = Path(args.testcase)
 
-test_cases = plan if isinstance(plan, list) else [plan]
+    if not testcase_path.is_file():
+        print(f"Testcase file not found: {testcase_path}")
+        return 1
 
-# Apply CartUp rules and execute each test case with its own fresh browser
-workflow = CartUpWorkflow()
+    testcase = testcase_path.read_text(encoding="utf-8")
 
-for index, case_plan in enumerate(test_cases, start=1):
+    plan = Planner().plan(testcase)
+    test_cases = plan if isinstance(plan, list) else [plan]
 
-    if len(test_cases) > 1:
-        print(f"\n===== Test Case {index}/{len(test_cases)} =====")
+    workflow = CartUpWorkflow()
+    failures = 0
 
-    case_plan = workflow.process(case_plan)
+    for index, case_plan in enumerate(test_cases, start=1):
+        if len(test_cases) > 1:
+            print(f"\n===== Test Case {index}/{len(test_cases)} =====")
 
-    print("Execution Plan")
-    print(json.dumps(case_plan, indent=4))
+        case_plan = workflow.process(case_plan)
 
-    executor = Executor()
-    executor.execute(case_plan)
+        if not args.quiet_plan:
+            print("Execution Plan")
+            print(json.dumps(case_plan, indent=4))
+
+        ok = Executor().execute(case_plan)
+        if not ok:
+            failures += 1
+
+    if failures:
+        print(f"\n{failures}/{len(test_cases)} test case(s) failed.")
+        return 1
+
+    return 0
+
+
+if __name__ == "__main__":
+    sys.exit(main())

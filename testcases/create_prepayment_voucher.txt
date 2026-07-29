@@ -30,3 +30,7 @@ Check Destination Region limited.
 Enter Select State "Dhaka North"
 Enter Select City "Lal"
 Enter Select Zone "Lalmatia Block A"
+Click Add
+Enter Select State "Dhaka North"
+Enter Select City "Badda"
+Enter Select Zone "Abdullah"
