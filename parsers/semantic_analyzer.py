@@ -11,7 +11,10 @@ class SemanticAnalyzer:
             return {"action": "goto", "url": match.group(1)}
 
         if match := re.fullmatch(r"(?:click|press|tap|choose)\s+(.+)", instruction, re.I):
-            return {"action": "click", "target": match.group(1)}
+            target = match.group(1).strip()
+            if len(target) >= 2 and target[0] == target[-1] and target [0] in {'"', "'"}:
+                target = target[1:-1].strip()
+            return {"action": "click", "target": target}
 
         if match := re.fullmatch(
             r"(?:check|tick|select)\s+(.+?)\s+(limited|unlimited|yes|no|whitelist|blacklist|both)",

@@ -265,6 +265,19 @@ class Locator:
         # 2) Icon-only button — before loose text, so "Click Add" hits the
         #    SVG "+" control instead of a URL fragment or route announcer.
         if wants_icon:
+            close_words = {"close", "cancel", "dismiss", "x", "×", "✖"}
+            wants_close = any(
+                v.lower() in close_words or v.lower().rstrip("s") in close_words
+                for v in variants
+            )
+            if wants_close:
+                for glyph in ("×", "x", "X", "✖", "＋"):
+                    strategies.append(
+                        lambda g=glyph: self._first_scoped(
+                            lambda root: root.get_by_role("button", name=g, exact=True)
+                            )
+                        )
+                    
             strategies.append(lambda: self._first_icon_button())
 
         # 3) Text on interactive elements only (avoids <p role="alert"> etc.)
@@ -326,9 +339,7 @@ class Locator:
         Skips elements that are not in the viewport / not enabled.
         """
         try:
-            candidates = self.page.locator(
-                "button:has(svg), [role='button']:has(svg)"
-            )
+            candidates = self.page.locator("button, [role='button']")
             count = candidates.count()
             for i in range(count - 1, -1, -1):
                 candidate = candidates.nth(i)
