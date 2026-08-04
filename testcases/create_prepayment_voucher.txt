@@ -34,6 +34,8 @@ Click Add
 Enter Select State "Dhaka North"
 Enter Select City "Badda"
 Enter Select Zone "South"
-Click Add
-Enter Select State "Dhaka North"
 Click "X"
+Enter Collection Type "Regular"
+Enter Collection Limit Per User "10"
+Click Start Date
+Select Date "2026-08-15"

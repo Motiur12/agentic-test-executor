@@ -1,6 +1,5 @@
 import re
 
-
 class SemanticAnalyzer:
     """Map supported natural-language variants to canonical execution steps."""
 
@@ -12,7 +11,7 @@ class SemanticAnalyzer:
 
         if match := re.fullmatch(r"(?:click|press|tap|choose)\s+(.+)", instruction, re.I):
             target = match.group(1).strip()
-            if len(target) >= 2 and target[0] == target[-1] and target [0] in {'"', "'"}:
+            if len(target) >= 2 and target[0] == target[-1] and target[0] in {'"', "'"}:
                 target = target[1:-1].strip()
             return {"action": "click", "target": target}
 
@@ -25,12 +24,15 @@ class SemanticAnalyzer:
             return {"action": "check", "group": group, "target": target}
 
         # Combobox / dropdown selection: Select State "Dhaka North"
+        # Date picker: Select Date "2026-08-15" / Select Delivery Date "2026-08-15"
         if match := re.fullmatch(
-            r"(?:select|choose)\s+(.+?)\s+['\"](.*?)['\"]",
+            r"(?:select|choose|pick)\s+(.+?)\s+['\"](.*?)['\"]",
             instruction,
             re.I,
         ):
             target, value = match.groups()
+            if re.fullmatch(r"\d{4}-\d{1,2}-\d{1,2}", value.strip()):
+                return {"action": "select_date", "target": target, "value": value.strip()}
             return {"action": "select", "target": target, "value": value}
 
         if match := re.fullmatch(

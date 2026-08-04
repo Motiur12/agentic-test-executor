@@ -1,7 +1,15 @@
+import re
+from datetime import datetime
+
 from playwright.sync_api import Page
 
 
 class Locator:
+
+    MONTH_NAMES = [
+        "January", "February", "March", "April", "May", "June",
+        "July", "August", "September", "October", "November", "December",
+    ]
 
     def __init__(self, page: Page):
         self.page = page
@@ -217,67 +225,74 @@ class Locator:
 
         # 1) Explicit identifiers and named interactive controls
         for v in variants:
-            strategies.extend([
-                lambda v=v: self._first(lambda: self.page.get_by_test_id(v)),
+            strategies.append(
+                lambda v=v: self._first(lambda: self.page.get_by_test_id(v))
+            )
 
+            strategies.extend([
                 lambda v=v: self._first_scoped(
                     lambda root: root.get_by_role("button", name=v, exact=True)
                 ),
                 lambda v=v: self._first_scoped(
-                    lambda root: root.get_by_role("button", name=v, exact=False)
-                ),
-
-                lambda v=v: self._first_scoped(
                     lambda root: root.get_by_role("link", name=v, exact=True)
                 ),
                 lambda v=v: self._first_scoped(
-                    lambda root: root.get_by_role("link", name=v, exact=False)
-                ),
-
-                lambda v=v: self._first_scoped(
                     lambda root: root.get_by_label(v, exact=True)
                 ),
-                lambda v=v: self._first_scoped(
-                    lambda root: root.get_by_label(v, exact=False)
-                ),
-
-                # a11y attributes on any element
                 lambda v=v: self._first(
                     lambda: self.page.locator(f'[aria-label="{v}"]')
-                ),
-                lambda v=v: self._first(
-                    lambda: self.page.locator(f'[aria-label*="{v}" i]')
                 ),
                 lambda v=v: self._first(
                     lambda: self.page.locator(f'button[aria-label="{v}" i]')
                 ),
                 lambda v=v: self._first(
-                    lambda: self.page.locator(f'button[aria-label*="{v}" i]')
-                ),
-                lambda v=v: self._first(
                     lambda: self.page.locator(f'[title="{v}"]')
-                ),
-                lambda v=v: self._first(
-                    lambda: self.page.locator(f'[title*="{v}" i]')
                 ),
             ])
 
+            # Loose / substring matching is only safe for real words. A single
+            # letter or symbol (e.g. "x", "+") as a case-insensitive substring
+            # would match almost any "Expand", "Export", "Next" ... element on
+            # the page and silently click the wrong thing without erroring.
+            if len(v) > 2:
+                strategies.extend([
+                    lambda v=v: self._first_scoped(
+                        lambda root: root.get_by_role("button", name=v, exact=False)
+                    ),
+                    lambda v=v: self._first_scoped(
+                        lambda root: root.get_by_role("link", name=v, exact=False)
+                    ),
+                    lambda v=v: self._first_scoped(
+                        lambda root: root.get_by_label(v, exact=False)
+                    ),
+                    lambda v=v: self._first(
+                        lambda: self.page.locator(f'[aria-label*="{v}" i]')
+                    ),
+                    lambda v=v: self._first(
+                        lambda: self.page.locator(f'button[aria-label*="{v}" i]')
+                    ),
+                    lambda v=v: self._first(
+                        lambda: self.page.locator(f'[title*="{v}" i]')
+                    ),
+                ])
+
         # 2) Icon-only button — before loose text, so "Click Add" hits the
         #    SVG "+" control instead of a URL fragment or route announcer.
+        #    Close/remove controls are often rendered with a Unicode glyph
+        #    (✖, ×, ✕...) as the accessible name/text rather than "X"/"close".
         if wants_icon:
-            close_words = {"close", "cancel", "dismiss", "x", "×", "✖"}
+            close_words = {"close", "remove", "delete", "clear", "x"}
             wants_close = any(
                 v.lower() in close_words or v.lower().rstrip("s") in close_words
                 for v in variants
             )
             if wants_close:
-                for glyph in ("×", "x", "X", "✖", "＋"):
+                for glyph in ("✖", "×", "✕", "☓", "X", "x"):
                     strategies.append(
                         lambda g=glyph: self._first_scoped(
                             lambda root: root.get_by_role("button", name=g, exact=True)
-                            )
                         )
-                    
+                    )
             strategies.append(lambda: self._first_icon_button())
 
         # 3) Text on interactive elements only (avoids <p role="alert"> etc.)
@@ -703,3 +718,102 @@ class Locator:
         locator.press("Backspace")
         locator.type(str(value), delay=30)
         locator.press("Tab")
+
+    # -------------------------
+    # DATE PICKER (PrimeReact Calendar, and similar)
+    # -------------------------
+
+    def select_date(self, target: str, value: str):
+        try:
+            target_date = datetime.strptime(value.strip(), "%Y-%m-%d")
+        except ValueError:
+            raise Exception(
+                f"Invalid date '{value}'. Expected format YYYY-MM-DD."
+            )
+
+        self._open_date_picker(target)
+        self._navigate_calendar_to(target_date.year, target_date.month)
+        self._click_calendar_day(target_date.day)
+
+    def _open_date_picker(self, target: str):
+        panel = self.page.locator(
+            ".p-datepicker-group-container, .p-datepicker-calendar"
+        ).first
+
+        try:
+            if panel.is_visible():
+                return
+        except Exception:
+            pass
+
+        generic = (target or "").strip().lower() in {"", "date", "the date", "a date"}
+
+        locator = None
+        if not generic:
+            locator = self.find_input(target) or self.find_combobox(target)
+
+        if locator is None:
+            # Single date field on the page, or a generic "Date" target that
+            # doesn't resolve to a named/labelled control.
+            locator = self._first(
+                lambda: self.page.locator(
+                    '.p-calendar input, .p-datepicker-trigger, '
+                    'input[placeholder*="/" i], input[placeholder*="yyyy" i]'
+                )
+            )
+
+        if locator is None:
+            raise Exception(f"Could not find date field: {target}")
+
+        locator = self._resolve_editable(locator)
+        locator.click()
+
+        panel.wait_for(state="visible", timeout=5000)
+
+    def _navigate_calendar_to(self, year: int, month: int):
+        header_month = self.page.locator(".p-datepicker-month").first
+        header_year = self.page.locator(".p-datepicker-year").first
+        next_btn = self.page.locator(".p-datepicker-next").first
+        prev_btn = self.page.locator(".p-datepicker-prev").first
+
+        # 20 years' worth of month-steps in either direction is more than
+        # enough headroom without risking an infinite loop.
+        for _ in range(240):
+            month_text = header_month.inner_text().strip()
+            year_text = header_year.inner_text().strip()
+
+            try:
+                current_month = self.MONTH_NAMES.index(month_text) + 1
+                current_year = int(year_text)
+            except ValueError:
+                raise Exception(
+                    f"Could not read calendar header: '{month_text} {year_text}'"
+                )
+
+            if (current_year, current_month) == (year, month):
+                return
+
+            if (current_year, current_month) < (year, month):
+                next_btn.click()
+            else:
+                prev_btn.click()
+
+            self.page.wait_for_timeout(120)
+
+        raise Exception(f"Could not navigate calendar to {month}/{year}")
+
+    def _click_calendar_day(self, day: int):
+        day_str = str(day)
+
+        cells = self.page.locator(
+            'td[data-pc-section="day"]:not(.p-datepicker-other-month) span'
+        )
+
+        for i in range(cells.count()):
+            cell = cells.nth(i)
+
+            if cell.inner_text().strip() == day_str:
+                cell.click()
+                return
+
+        raise Exception(f"Could not find day {day} in the visible calendar month")

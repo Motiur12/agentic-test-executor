@@ -7,6 +7,7 @@ from .enter_number import EnterNumberAction
 from .check import CheckAction
 from .wait_for_navigation import WaitForNavigationAction
 from .select import SelectAction
+from .select_date import SelectDateAction
 from .wait import WaitAction
 
 ACTIONS = {
@@ -19,5 +20,6 @@ ACTIONS = {
     "check": CheckAction(),
     "wait_for_navigation": WaitForNavigationAction(),
     "select": SelectAction(),
+    "select_date": SelectDateAction(),
     "wait": WaitAction(),
 }
